@@ -1,0 +1,416 @@
+---
+title: "Final Assignment"
+author: "Dhairav Chhatbar"
+date: "5/3/2020"
+output: html_document
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(MASS)
+library(dplyr)
+library(skimr)
+library(ggcorrplot)
+library(matlib)
+library(gridExtra)
+library(tidyr)
+library(kableExtra)
+```
+
+
+## Problem 1
+**Using R, generate a random variable X that has 10,000 random uniform numbers from 1 to N, where N can be any number of your choosing greater than or equal to 6.  Then generate a random variable Y that has 10,000 random normal numbers with a mean of:
+$μ=\sigma=\frac{N+1}{2}$**  
+
+```{r}
+N <-10
+count <- 10000
+
+X <- runif(count, 1, N)
+ggplot() + aes(X) + geom_histogram(binwidth = .25, colour="red", fill="pink")
+
+Y <- rnorm(count, (N+1)/2, (N+1)/2)
+ggplot() + aes(Y) + geom_histogram(binwidth = .5, colour="red", fill="pink")
+
+XY <- data.frame(X, Y)
+
+head(XY) %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+```
+
+  
+**Calculate as a minimum the below probabilities a through c.  Assume the small letter "x" is estimated as the median of the X variable, and the small letter "y" is estimated as the 1st quartile of the Y variable.  Interpret the meaning of all probabilities.**  
+
+```{r}
+x<- median(X)
+y<- quantile(Y)[2]
+x
+y
+
+```
+
+    
+**a. $P(X>x | X>y)$**  
+Given that X is greater than the 1st quartile of the random variable Y, the conditional probability that X will be greater than it's median is:
+```{r}
+length(XY$X[X>x])/length(XY$X[X>y])
+head(subset(XY, XY$X>y) %>% filter(X > x)) %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+
+
+```
+
+
+  
+**b. $P(X>x, Y>y)$**  
+The joint probaility of X being greater than it's median AND Y being in the 2nd, 3rd, or 4th quartiles is:
+```{r}
+nrow(subset(XY, XY$X>x & XY$Y>y))/count
+head(subset(XY, XY$X>x & XY$Y>y)) %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+
+```
+  
+**c. $P(X<x | X>y)$**  
+Given that X is greater than Y's first quartile, the probability that X will be less than it's median is:
+```{r}
+length(XY$X[XY$X<x])/length(XY$X[XY$X>y])
+head(subset(XY, XY$X>y) %>% filter(X < x)) %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+**d. Investigate whether $P(X>x, Y>y)=P(X>x)P(Y>y)$ by building a table and evaluating the marginal and joint probabilities**  
+  
+Two variables are said to be independant if $P(X>x, Y>y)=P(X>x)P(Y>y)$. In this case when comparing the joint probability to product of the marginal probabilities, we see that they are not equal, but only slightly off. These should be independant as both X and Y are randomly generated
+
+```{r}
+Y_greaterThan_y <- c(nrow(subset(XY, XY$X>x & XY$Y>y)), nrow(subset(XY, XY$X<x & XY$Y>y)))
+Y_lessThan_y <- c(nrow(subset(XY, XY$X>x & XY$Y<y)), nrow(subset(XY, XY$X<x & XY$Y<y)))
+
+df <- data.frame(Y_greaterThan_y, Y_lessThan_y)
+row.names(df) <- c("X_greaterThan_x", "X_lessThan_x")
+df %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+#P(X>x and Y>y): Joint
+df[1,1]/sum(df)
+
+
+#P(X>x)P(Y>y): Marginal
+(sum(df[1,])/sum(df)) * (sum(df[,1])/sum(df))
+
+
+```
+
+
+**e. Check to see if independence holds by using Fisher’s Exact Test and the Chi Square Test. What is the difference between the two? Which is most appropriate?**  
+  
+
+
+
+```{r}
+
+fisher.test(df, conf.level = .99)
+chisq.test(df)
+
+```
+Both the Fisher's Exact test and the Chi-Squared test indicate that X and Y are independent variables because both have relatively large p-values over the significance level, thus indicating that we cannot reject the null hypothesis which states that the two variables are independent. 
+  
+The two most common tests for determining whether measurements from different groups are independent are Fisher's Exact test and the Chi-Squared test. There are some differences between the two that should be noted. 
+  
+Chi-Squared Test  
+  
+* can be used on contingency tables with dimensions higher than 2x2
+* An approximate test 
+* Not useful for ordinal data
+* accuracy increases with sample size
+ 
+ 
+Fisher's Exact Test
+  
+* can only be used on 2x2 contingency tables
+* A more exact test
+* Suited for smaller datasets of sample sizes less than 20
+* Computationally intensive (calculations increase with sample sizes)
+
+Based on this in this case, the Chi-Squared test is more appropriate because we have a larger sample size
+
+## Problem 2
+You are to register for Kaggle.com (free) and compete in the House Prices: Advanced Regression Techniques competition.  https://www.kaggle.com/c/house-prices-advanced-regression-techniques. 
+
+Data Description: https://github.com/dhairavc/DATA605Computational-Mathematics/blob/master/data_description.txt
+
+
+
+```{r}
+housingPrices_test <- read.csv("https://raw.githubusercontent.com/dhairavc/DATA605Computational-Mathematics/master/test.csv")
+housingPrices_train <- read.csv("https://raw.githubusercontent.com/dhairavc/DATA605Computational-Mathematics/master/train.csv")
+```
+
+### Descriptive and Inferential Statistics
+  
+**a. Provide univariate descriptive statistics and appropriate plots for the training data set**  
+```{r, message=FALSE}
+skim(housingPrices_train)
+
+
+ggplot(housingPrices_train, aes(housingPrices_train$SalePrice)) + 
+  geom_histogram(colour="red", fill="pink") + scale_x_continuous(labels = scales::comma) + 
+  labs(x="Sale Price", title = "SalePrice Histogram" )
+  
+ggplot(housingPrices_train, aes(x=as.factor(housingPrices_train$OverallQual), y=housingPrices_train$SalePrice)) +
+   geom_boxplot(color="orchid4", fill="plum3", alpha=0.5) + scale_y_continuous(labels = scales::comma) + xlab("OverallQual") + ylab("SalesPrice") 
+
+housingPrices_train %>% ggplot(aes(x=GrLivArea, y=SalePrice)) + geom_point(color = "plum3") + 
+  scale_x_continuous(labels = scales::comma) + scale_y_continuous(labels = scales::comma)
+```
+
+**b. Provide a scatterplot matrix for at least two of the independent variables and the dependent variable**  
+```{r, fig.width=10, fig.height=10}
+
+housingPrices_train %>% 
+  dplyr::select(TotalBsmtSF, GrLivArea, BedroomAbvGr, SalePrice) %>% plot()
+
+```
+
+**c. Derive a correlation matrix for any three quantitative variables in the dataset** 
+```{r, fig.width=25, fig.height=25}
+to_plot <- housingPrices_train %>% select_if(is.numeric) %>% dplyr::select(-Id, -MSSubClass)
+q <- cor(to_plot)
+ggcorrplot(q, type = "upper", outline.color = "white",
+           ggtheme = theme_gray,
+           colors = c("#6D9EC1", "white", "#E46726"),
+           lab = TRUE, show.legend = FALSE, tl.cex = 20, lab_size = 6)
+```
+```{r}
+
+to_plot2 <- to_plot %>% dplyr::select(GrLivArea, OverallQual, GarageArea)
+q2 <- cor(to_plot2)
+q2 %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+ggcorrplot(q2, type = "upper", outline.color = "white",
+           ggtheme = theme_gray,
+           colors = c("#6D9EC1", "white", "#E46726"),
+           lab = TRUE, show.legend = FALSE)
+
+```
+
+**d. Test the hypotheses that the correlations between each pairwise set of variables is 0 and provide an 80% confidence interval**  
+```{r}
+LivingAreaSQFT <- housingPrices_train$GrLivArea
+MaterialQualityRating <- housingPrices_train$OverallQual
+GarageAreaSQFT <- housingPrices_train$GarageArea
+
+pair1 <- cor.test(LivingAreaSQFT, MaterialQualityRating, method = "pearson", conf.level = .8)
+pair2 <- cor.test(LivingAreaSQFT, GarageAreaSQFT, method = "pearson", conf.level = .8)
+pair3 <- cor.test(MaterialQualityRating, GarageAreaSQFT, method = "pearson", conf.level = .8)
+
+pair1
+pair2
+pair3
+```
+Based on the tests, all pairs are stastically significant due to the very low p-values amongst each pair.  
+  
+**e. Discuss the meaning of your analysis.  Would you be worried about familywise error? Why or why not?**  
+  
+To test the hypotheses that the correlations between each pairwise set of variables is 0, the Pearson correlation test was used. The Pearson correlation test measures the linear relationship between 2 variables and gives a value between -1 and 1 to show how strong the association is between the said variables. 
+  
+In this example 3 variables were tested; the "Garage Area", the "Overall rating of material and finish of the house", and the "Living Area in SQFT above grade":
+```{r}
+pairNames <- c(pair1$data.name, pair2$data.name, pair3$data.name)
+Correlation <- c(as.numeric(pair1$estimate), as.numeric(pair2$estimate), as.numeric(pair3$estimate))
+pairpValues <- c(pair1$p.value, pair2$p.value, pair3$p.value)
+ConfLower <- c(pair1$conf.int[1], pair2$conf.int[1], pair3$conf.int[1])
+ConfUpper <- c(pair1$conf.int[2], pair2$conf.int[2], pair3$conf.int[2])
+
+PairResults <- data.frame(pairNames, Correlation, pairpValues, ConfLower, ConfUpper)
+PairResults %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+
+```
+The results indicate that there is a positive correlation between the pairs and with a p-value of all 3 near 0, we can reject the null hypotheses. 
+  
+However, that is a concern for a familywise error since we are using the same sample data to conduct multiple tests. This increases the chance of committing a Type I error. The formula for computing the familywise error is:
+  
+$FWER=1-CI^n$  
+$FWER=1-.80^3$  
+$FWER=0.488$  
+  
+Given that there is a 48.8% chance of a Type I error, this should be a concern.
+
+
+### Linear Algebra and Correlation
+**a. Invert your correlation matrix from above (This is known as the precision matrix and contains variance inflation factors on the diagonal)**  
+```{r}
+corr_Mat <- round(q2,3)
+prec_Mat <- Inverse(corr_Mat)
+
+corr_Mat %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+prec_Mat %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+**b. Multiply the correlation matrix by the precision matrix, and then multiply the precision matrix by the correlation matrix** 
+```{r}
+round(corr_Mat %*% prec_Mat) %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+round(prec_Mat %*% corr_Mat) %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+**c. Conduct LU decomposition on the matrix**  
+```{r}
+
+LUdecomp <- function(A)
+{  
+
+if(dim(A)[1] != dim(A)[2])  
+  return("Not a square matrix. LU factorization not applicable on this matrix")
+  
+  
+  #Crate L & Umatricies
+U <- matrix(rep(0, nrow(A)*ncol(A)), nrow(A))
+L <- diag(1, nrow(A), ncol(A))
+
+
+#Calculate Upper Triangular Matrix U
+#i = rows numbers
+#j = columns numbers
+
+for (i in 1:nrow(U)) {
+  for (j in 1:ncol(U)) {
+    
+    #CalculateU
+    if(i <= j)
+    { 
+      tempU <- c()
+      for (k in 1:i-1) {
+        
+        tempU <- c(tempU,  (U[k,j] * L[i,k])) 
+      }# end for
+      
+      U[i,j] <- A[i,j] - sum(tempU) #SumU(i, j, U, L) 
+    } #end CalculateU 
+    
+    #CalculateL
+    if(i > j)
+    {
+      tempL <- c()
+      for (k in 1:j-1) {
+        tempL <- c(tempL, (U[k,j]*L[i,k]))
+      }#end for
+      L[i,j] <- (1/U[j,j])*(A[i,j] - sum(tempL)) #sumL(i, j, U, L))
+    } #end calculateL
+    
+  }# end column for
+
+}# end row for
+
+
+
+print("Matrix A")
+print(A)
+cat(" \n")
+
+print("Matrix L")
+print(L)
+cat(" \n")
+
+print("Matrix U")
+print(U)
+cat(" \n")
+
+print("A == LU?")
+print(A == (L %*% U))
+cat(" \n")
+
+}# end function
+
+LUdecomp(q2)
+
+```
+
+### Calculus-Based Probability & Statistics  
+**a. Many times, it makes sense to fit a closed form distribution to data. Select a variable in the Kaggle.com training dataset that is skewed to the right, shift it so that the minimum value is absolutely above zero if necessary. Then load the MASS package and run fitdistr to fit an exponential probability density function.**  
+See https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/fitdistr.html
+  
+  
+The Unfinished Basement in SQFT variable is skewed to the right, with a minimum value of 0. This variable is then shifted to the right by 50 to make the minimum value at 50 and then fit it to the exponential distribution
+```{r, message=FALSE}
+ggplot() + aes(housingPrices_train$BsmtUnfSF) + geom_histogram(fill="palegreen3", color="palegreen4") + 
+  xlab("Unfinished Basement SQFT") + ylab("Count")
+min(housingPrices_train$BsmtUnfSF)
+
+
+BsmtUnfSF_shifted <- housingPrices_train$BsmtUnfSF + 50
+min(BsmtUnfSF_shifted)
+BsmtUnfSF_fitted <- fitdistr(BsmtUnfSF_shifted, "exponential")
+BsmtUnfSF_fitted
+```
+
+
+**b. Find the optimal value of $\lambda$ for this distribution, and then take 1000 samples from this exponential distribution using this value (e.g., rexp(1000, $\lambda$)). Plot a histogram and compare it with a histogram of your original variable**  
+
+The side-by-side comparisons of the original and estimated histograms so that both follow a similar distribution. 
+```{r, message=FALSE}
+#Optimal lambda value
+as.numeric(BsmtUnfSF_fitted$estimate)
+
+
+#Simulating Exponential Distributions
+BsmtUnfSF_sim <- rexp(1000, as.numeric(BsmtUnfSF_fitted$estimate))
+
+p_orig <- ggplot() + aes(housingPrices_train$BsmtUnfSF) + geom_histogram(fill="palegreen3", color="palegreen4") + 
+  xlab("Unfinished Basement SQFT") + ylab("Count") + ggtitle("Original")
+
+p_est <- ggplot() + aes(BsmtUnfSF_sim) + geom_histogram(fill="cadetblue3", color="cadetblue4") + 
+  xlab("Unfinished Basement SQFT") + ylab("Count") + ggtitle("Estimate")
+
+grid.arrange(p_orig, p_est, ncol=2)
+
+
+```
+
+
+**c. Using the exponential pdf, find the 5th and 95th percentiles using the cumulative distribution function (CDF)** 
+
+```{r}
+quantile(BsmtUnfSF_sim, probs = c(0.05, 0.95))
+
+```
+
+**d. Also generate a 95% confidence interval from the empirical data, assuming normality**  
+```{r}
+t.test(BsmtUnfSF_sim)$conf.int
+
+```
+**e. Finally, provide the empirical 5th percentile and 95th percentile of the data.  Discuss.**  
+```{r}
+quantile(housingPrices_train$BsmtUnfSF, c(.05, .95))
+
+```
+
+The 5th and 95th percentiles of both are comparable, though from a practical standpoint the some estimated values do not make sense such as an unfinished basement of 4000+ square feet. 
+
+
+### Modeling
+**Build some type of multiple regression  model and submit your model to the competition board.  Provide your complete model summary and results with analysis.  Report your Kaggle.com user name and score.**  
+```{r}
+salePrice.lm <- lm(SalePrice ~ LotArea + OverallQual + YearBuilt + YearRemodAdd + BsmtFinSF1 + BsmtUnfSF + TotalBsmtSF + X1stFlrSF + GrLivArea + FullBath + TotRmsAbvGrd +Neighborhood,  data = housingPrices_train)
+
+summary(salePrice.lm)
+
+salePrice.lm <- update(salePrice.lm, .~. -BsmtUnfSF -FullBath -TotRmsAbvGrd -TotalBsmtSF -X1stFlrSF - BsmtFinSF1, data = housingPrices_train)
+summary(salePrice.lm)
+
+plot(salePrice.lm, which = c(1:2))
+
+```
+  
+  
+Looking at the regression plots we see that the residuals are mostly normally distributed except at that tail end which are outliers. The variables LotArea, OverallQual, YearBuilt, YearRemodAdd, GrLivArea and the Neighboorhod contribute most to the sales price. On the practical basis this makes sense, as bigger, newer, houses in good condition/quality in certain neighborhood would be more attractive and thus would sell for higher prices. The model however is not definitive as it is only able explain about 79.8% of the variation.
+```{r}
+salePrice.pr <- data.frame(housingPrices_test$Id, predict(salePrice.lm, newdata = housingPrices_test))
+colnames(salePrice.pr) <- c("Id", "SalePrice")
+salePrice.pr %>% filter(is.na(SalePrice))
+write.csv(salePrice.pr, "C:/Temp/housingPrices_pr.csv", row.names = FALSE)
+
+```
+
+User: dhairavchhatbar  
+Score: 0.19667  
+
+
